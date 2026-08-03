@@ -13,32 +13,69 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      - name: Install Node.js
+      - name: Install Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Rust project (release mode)
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path=src-tauri/Cargo.toml -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path=src-tauri/Cargo.toml -- -D warnings
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Rust (release mode)
+        run: cargo build --release --manifest-path=src-tauri/Cargo.toml
+
+      - name: Install Tauri CLI
+        run: |
+          cargo install tauri-cli --version "^2.0.0" --root "$HOME/.cargo"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build Tauri app
         run: |
           cd src-tauri
-          cargo build --release --verbose
+          cargo tauri build --verbose
+        env:
+          TAURI_PRIVATE_KEY: ""
+          TAURI_KEY_PASSWORD: ""
 
-      - name: Upload Rust executable (for debugging)
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: rust-executable
-          path: src-tauri/target/release/*.exe
-          retention-days: 7
+          name: snapocr-windows-installer
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: warn
 
-      - name: Build summary
-        run: |
-          echo "## Rust 构建完成" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "请下载 Artifacts 中的 `rust-executable` 查看 snapocr.exe" >> $GITHUB_STEP_SUMMARY
+      - name: Upload build logs on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs
+          path: |
+            src-tauri/target/
+            dist/
