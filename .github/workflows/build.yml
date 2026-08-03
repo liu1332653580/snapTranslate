@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install frontend dependencies
         run: npm ci
@@ -28,27 +27,22 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2.0.0"
+      - name: Build Rust binary (skip Tauri bundling)
+        run: |
+          cd src-tauri
+          cargo build --release --verbose
 
-      - name: Build Tauri app
-        run: cargo tauri build --verbose
-        env:
-          TAURI_PRIVATE_KEY: ""
-          TAURI_KEY_PASSWORD: ""
-
-      - name: Upload Windows installer
+      - name: Upload Rust executable
         uses: actions/upload-artifact@v4
         with:
-          name: snapocr-windows-installer
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          name: snapocr-rust-executable
+          path: src-tauri/target/release/*.exe
           if-no-files-found: warn
 
-      - name: Upload build logs on failure
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: build-logs
-          path: |
-            src-tauri/target/
-            dist/
+      - name: Build summary
+        run: |
+          echo "## Rust 构建完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ 成功生成 Rust 二进制文件" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**说明**: 这是 Rust 核心功能，不含 Tauri 打包。" >> $GITHUB_STEP_SUMMARY
