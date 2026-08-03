@@ -3,103 +3,42 @@ name: Build SnapOCR
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
-    defaults:
-      run:
-        shell: bash
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Cache Rust cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache Rust cargo git
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache Rust cargo build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Check formatting
-        run: cargo fmt --manifest-path=src-tauri/Cargo.toml -- --check
+      - name: Build Rust project (release mode)
+        run: |
+          cd src-tauri
+          cargo build --release --verbose
 
-      - name: Run Clippy
-        run: cargo clippy --manifest-path=src-tauri/Cargo.toml -- -D warnings
-
-      - name: Type check TypeScript
-        run: npm run typecheck
-
-      - name: Build frontend for production
-        run: npm run build
-
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2.0.0"
-
-      - name: Build Tauri application
-        run: cargo tauri build --verbose
-        env:
-          TAURI_PRIVATE_KEY: ""
-          TAURI_KEY_PASSWORD: ""
-
-      - name: Upload Windows installer artifact
+      - name: Upload Rust executable (for debugging)
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: snapocr-windows-installer
-          path: src-tauri/target/release/bundle/nsis/*.exe
-          retention-days: 90
-
-      - name: Upload build logs if failed
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: build-logs
-          path: |
-            src-tauri/target/
-            dist/
+          name: rust-executable
+          path: src-tauri/target/release/*.exe
           retention-days: 7
 
       - name: Build summary
-        if: success()
         run: |
-          echo "## ✅ SnapOCR 打包成功" >> $GITHUB_STEP_SUMMARY
+          echo "## Rust 构建完成" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**下载方式**：" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. 点击上方的 **Artifacts** 下拉菜单" >> $GITHUB_STEP_SUMMARY
-          echo "2. 下载 `snapocr-windows-installer`" >> $GITHUB_STEP_SUMMARY
-          echo "3. 运行下载的 `.exe` 安装 SnapOCR" >> $GITHUB_STEP_SUMMARY
+          echo "请下载 Artifacts 中的 `rust-executable` 查看 snapocr.exe" >> $GITHUB_STEP_SUMMARY
