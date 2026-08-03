@@ -1,0 +1,40 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Explicitly declare text files
+*.md text
+*.tsx text
+*.ts text
+*.js text
+*.json text
+*.yml text
+*.yaml text
+*.toml text
+*.rs text
+*.tsx text
+*.css text
+*.html text
+
+# Denote all files in these directories as text
+src/** text
+scripts/** text
+docs/** text
+.github/** text
+
+# Denote all files in these directories as binary
+src-tauri/icons/** binary
+datasets/** binary
+
+# Force LF for shell scripts
+*.sh text eol=lf
+
+# Force CRLF for Windows batch files
+*.bat text eol=crlf
+
+# Prefer CRLF for Windows-specific files
+*.sln text eol=crlf
+*.vcxproj text eol=crlf
+*.props text eol=crlf
+
+# Prefer LF for all other files
+* text eol=lf

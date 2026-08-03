@@ -1,0 +1,86 @@
+name: Build SnapOCR
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # 允许在 Actions 页面手动触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Rust cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Rust cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rustfmt check
+        run: cargo fmt --manifest-path=src-tauri/Cargo.toml -- --check
+
+      - name: Clippy check
+        run: cargo clippy --manifest-path=src-tauri/Cargo.toml -- -D warnings
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Build Tauri app
+        run: npm run tauri:build
+        env:
+          # 跳过签名，MVP 阶段不需要
+          TAURI_PRIVATE_KEY: ""
+          TAURI_KEY_PASSWORD: ""
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapocr-windows-installer
+          path: src-tauri/target/release/bundle/nsis/snapocr_*.exe
+          retention-days: 90
+
+      - name: Upload NSIS directory (for debugging)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: nsis-build-logs
+          path: src-tauri/target/release/bundle/nsis/
+          retention-days: 7
+
+      - name: Build summary
+        if: success()
+        run: |
+          echo "## ✅ SnapOCR 打包成功" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "下载地址：点击上方 Artifacts 中的 snapocr-windows-installer" >> $GITHUB_STEP_SUMMARY
